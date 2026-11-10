@@ -793,7 +793,7 @@ function buildWorld(){
   // Shack and people
   { const [x,y]=T(6.2,206);addThing({t:'shack',x,y,hw:30,hh:16,spr:shackSpr});avoid.push([x,y]);}
   { const [x,y]=T(9.2,207.4);if(S.helpers.jordan)addThing({t:'cart',x,y,hw:0,hh:0,label:'SHOP',ir:28,hidden:true});else addThing({t:'jordan',x,y,hw:5,hh:5,label:S.flags.intro?'TALK':'TALK',ir:28});avoid.push([x,y],[10*TILE,211*TILE]);}
-  if(S.flags.bossDone){const [x,y]=T(13.5,212);addThing({t:'bus',x,y,hw:22,hh:8,spr:busSpr,label:'TRAVEL',ir:36});avoid.push([x,y])}
+  if(S.flags.bossDone){addBuses();G.things.filter(o=>o.t==='bus').forEach(o=>avoid.push([o.x,o.y]))}
   HELPERS.forEach(h=>{if(h.x&&!S.helpers[h.id]){const [x,y]=T(h.x,h.y);addThing({t:'helper',id:h.id,x,y,hw:0,hh:0,label:'TALK',ir:26});avoid.push([x,y])}});
   [{id:'shovel',x:15.2,y:188.5,s:shovelSpr},{id:'volleyball',x:15,y:161,s:ballSpr}].forEach(q=>{if(!S.flags[q.id]){const [x,y]=T(q.x,q.y);addThing({t:'quest',id:q.id,x,y,hw:0,hh:0,label:'PICK UP',ir:24,spr:q.s});avoid.push([x,y])}});
   [[6.6,160],[6.6,116],[6.6,66]].forEach(([a,b])=>{const [x,y]=T(a,b);addThing({t:'cart',x,y,hw:17,hh:8,spr:cartSpr,label:'SHOP',ir:34});avoid.push([x,y])});
@@ -827,10 +827,15 @@ function addTreasure(avoid){
   for(const id in TREASURE){const c=TREASURE[id];if(c.b!==BEACH.id)continue;const x=c.x*TILE,y=c.y*TILE;
     addThing(c.box?{t:'chest',id,x,y,hw:7,hh:6,label:'OPEN',ir:24}:{t:'dig',id,x,y,hw:0,hh:0,label:'DIG',ir:22});avoid.push([x,y])}
 }
+// A bus at each end of every beach, so she never has to walk back to travel.
+function addBuses(){
+  const spots=BEACH.id==='tc'?[[13.5,212],[9.5,24]]:[[10,MH-5],[10,5]];
+  spots.forEach(([a,b])=>{const x=a*TILE,y=b*TILE;if(!G.things.some(o=>o.t==='bus'&&Math.abs(o.y-y)<64))addThing({t:'bus',x,y,hw:22,hh:8,spr:busSpr,label:'TRAVEL',ir:36})});
+}
 function finishWorld(){
   G.dog={x:S.x-14,y:S.y+8,flip:false,seek:null,t:0,frame:0,sniff:0};
   refreshCrew();
-  spawnBacon(true);G.baconT=30;
+  G.bacons=[];placeBacon();G.baconT=45;
 }
 function refreshCrew(){
   const old=G.crew||[];G.crew=[];
@@ -839,7 +844,7 @@ function refreshCrew(){
 }
 function buildBeach(){
   const r=rngOf(BEACH.p*911+7);const avoid=[];const T=(x,y)=>[x*TILE,y*TILE];
-  { const [x,y]=T(10,MH-5);addThing({t:'bus',x,y,hw:22,hh:8,spr:busSpr,label:'TRAVEL',ir:36});avoid.push([x,y]);}
+  addBuses();G.things.filter(o=>o.t==='bus').forEach(o=>avoid.push([o.x,o.y]));
   { const [x,y]=T(6.8,MH-14);addThing({t:'cart',x,y,hw:17,hh:8,spr:cartSpr,label:'SHOP',ir:34});avoid.push([x,y]);}
   [[9.5,MH-12],[9,42],[9,14]].forEach(([a,b])=>{const [x,y]=T(a,b);addThing({t:'bin',x,y,hw:7,hh:6,spr:binSpr,label:'EMPTY',ir:26});avoid.push([x,y])});
   addTreasure(avoid);
@@ -1019,7 +1024,7 @@ function objective(){
     if(!(S.stamps[BEACH.id]||{}).clean)return go(`Clean ${BEACH.name}: ${Math.max(0,S.trash.length-3)} left`,nearestTrash());
     const miss=Object.keys(TREASURE).filter(id=>TREASURE[id].b===BEACH.id&&!S.treasure[id]);
     if(miss.length){const o=G.things.find(t=>t.id===miss[0]);return go(`Find the hidden treasure (${miss.length} left)`,o)}
-    return go('This beach is spotless. Take the bus to the next one.',G.things.find(t=>t.t==='bus'));
+    return go('This beach is spotless. Take the bus to the next one.',nearestThing('bus'));
   }
   if(S.stats.grabbed<5)return go(`Grab 5 pieces of trash (${S.stats.grabbed}/5)`,nearestTrash());
   if(!f.dumped)return go('Empty your bag at the blue bin',nearestThing('bin'));
@@ -1038,7 +1043,7 @@ function objective(){
   if(!f.bossDone)return go('Something huge is tangled up at the inlet',{x:12*TILE,y:40*TILE});
   const left=['shelly','myrtle','gus','pickles'].filter(id=>!rescued(id));
   if(left.length){const t=G.turtles.find(t=>t.id===left[0]);return go(`Free ${JOKES[left[0]].name} to finish the Treasure Coast`,t)}
-  return go('Board the beach bus by the shack to pick a new beach',G.things.find(t=>t.t==='bus'));
+  return go('Board a beach bus to pick a new beach',nearestThing('bus'));
 }
 
 /* ---------- Dialogue ---------- */
@@ -1237,12 +1242,21 @@ function intro(){
     {who:GIFT.from,face:'jordan',text:`Empty your bag at the blue bins. And watch for people who might want to help. You're a hard person to say no to.`},
   ],()=>{save();banner(ZONES[0].name)});
 }
-function spawnBacon(initial){
-  for(let i=0;i<12;i++){const a=Math.random()*6.28,d=initial?50+Math.random()*90:90+Math.random()*110;const x=G.x+Math.cos(a)*d,y=clamp(G.y+Math.sin(a)*d,NORTH+8,HPX-14);if(x<edgePx(y)&&freeSpot(x,y)){G.bacons.push({x,y});return}}
+// Three fixed bacon spots per zone (and per travel beach), so Crash Mode is always possible at least once.
+const BACON_ROWS={tc:[203,186,176, 162,145,128, 112,103,82, 66,56,48]};
+function placeBacon(){
+  S.baconTaken=S.baconTaken||{};
+  const rows=BACON_ROWS[BEACH.id]||[MH-14,36,14];
+  rows.forEach((row,i)=>{const id=BEACH.id+':'+i;if(S.baconTaken[id])return;const y=row*TILE;
+    for(const f of[.45,.3,.6,.2,.7,.4]){const x=lerp(dunePx(y)+16,edgePx(y)-10,f);if(freeSpot(x,y)){G.bacons.push({x,y,id});return}}
+    G.bacons.push({x:lerp(dunePx(y)+16,edgePx(y)-10,.45),y,id})});
+}
+function spawnBacon(){
+  for(let i=0;i<12;i++){const a=Math.random()*6.28,d=90+Math.random()*110;const x=G.x+Math.cos(a)*d,y=clamp(G.y+Math.sin(a)*d,NORTH+8,HPX-14);if(x<edgePx(y)&&freeSpot(x,y)){G.bacons=G.bacons.filter(b=>b.id);G.bacons.push({x,y});return}}
 }
 function eatBacon(b){
   if(S.bacon>=3)return;
-  G.bacons.splice(G.bacons.indexOf(b),1);S.bacon++;sfx.buy();parts(b.x,b.y,'#f0524f',6,30);G.baconT=35+Math.random()*25;
+  G.bacons.splice(G.bacons.indexOf(b),1);if(b.id){S.baconTaken=S.baconTaken||{};S.baconTaken[b.id]=true}S.bacon++;sfx.buy();parts(b.x,b.y,'#f0524f',6,30);G.baconT=35+Math.random()*25;
   if(S.bacon>=3){toast('Hopper full! Launch Crash anytime.',2600);sfx.bark()}
   else toast(`Bacon! ${3-S.bacon} more to fill the hopper.`,1400);
 }
@@ -1466,7 +1480,7 @@ function update(dt){
   if(G.dog)updateDog(dt);
   updateCrew(dt);
   if(S.bacon<3)for(let i=G.bacons.length-1;i>=0;i--){const b=G.bacons[i];if(dist(b.x,b.y,G.x,G.y-3)<12)eatBacon(b)}
-  if(S.bacon<3&&G.frenzy<=0&&!G.bacons.length){G.baconT-=dt;if(G.baconT<=0){G.baconT=35+Math.random()*25;spawnBacon()}}
+  if(S.bacon<3&&G.frenzy<=0&&!G.bacons.some(b=>dist(b.x,b.y,G.x,G.y)<320)){G.baconT-=dt;if(G.baconT<=0){G.baconT=35+Math.random()*25;spawnBacon()}}
   const cb=$('btnCrash'),cbOn=S.bacon>=3&&G.frenzy<=0;if(cb.hidden===cbOn)cb.hidden=!cbOn;
   for(let i=G.debris.length-1;i>=0;i--){const d=G.debris[i];d.t+=dt;d.x+=d.vx*dt;d.y+=d.vy*dt;d.vy+=150*dt;d.r+=d.vr*dt;if(d.t>1.6)G.debris.splice(i,1)}
   checkStamp();
@@ -1742,7 +1756,7 @@ function showEnding(){
     <button class="bigbtn" id="endmap">Pick your next beach</button>
     <button class="bigbtn alt" id="endgo">Stay on the Treasure Coast</button></div>`;
   const c=$('endT');c.width=turtleSpr.leatherback[0].width;c.height=turtleSpr.leatherback[0].height;c.getContext('2d').drawImage(turtleSpr.leatherback[0],0,0);
-  const bus=()=>{const [x,y]=[13.5*TILE,212*TILE];if(!G.things.find(t=>t.t==='bus'))addThing({t:'bus',x,y,hw:22,hh:8,spr:busSpr,label:'TRAVEL',ir:36})};bus();
+  addBuses();
   $('endgo').onclick=()=>{e.hidden=true;$('controls').hidden=false;G.mode='play';save();banner('The tide never stops.')};
   $('endmap').onclick=()=>{e.hidden=true;openMap()};
 }
