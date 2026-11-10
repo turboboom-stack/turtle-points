@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -11,8 +10,9 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon-192.png">
 <link rel="manifest" href="manifest.json">
-<style>:root{color-scheme:dark}html,body{margin:0;background:#2a1a40}img{max-width:100%}[hidden]{display:none!important}#stage{position:fixed!important;inset:0}</style>
+<style>:root{color-scheme:dark}html,body{margin:0;background:#2a1a40;overscroll-behavior:none}img{max-width:100%}[hidden]{display:none!important}#stage{position:fixed!important;inset:0}</style>
 <title>Turtle Points</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,viewport-fit=cover,user-scalable=no">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=VT323&display=swap">
 <style>
@@ -24,6 +24,7 @@
   color-scheme:dark;
 }
 [hidden]{display:none!important}
+*{touch-action:manipulation}
 html,body{height:100%;margin:0;background:var(--plum);overflow:hidden;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 body{font:21px/1.15 var(--body);color:var(--ink)}
 #stage{position:relative;width:100%;height:100%;overflow:hidden;touch-action:none;background:var(--deep)}
@@ -2063,7 +2064,11 @@ addEventListener('keydown',e=>{
 });
 addEventListener('keyup',e=>{keys[e.code]=false;keyAxis()});
 document.addEventListener('contextmenu',e=>e.preventDefault());
-document.addEventListener('gesturestart',e=>e.preventDefault());
+// Stop iPhone double-tap and pinch zoom, which iOS allows even when the page asks it not to
+['gesturestart','gesturechange','gestureend'].forEach(t=>document.addEventListener(t,e=>e.preventDefault(),{passive:false}));
+document.addEventListener('touchmove',e=>{if(e.touches.length>1)e.preventDefault()},{passive:false});
+{let lastTap=0;document.addEventListener('touchend',e=>{const now=Date.now();if(now-lastTap<350&&!(e.target.closest&&e.target.closest('button,input,a,select,label')))e.preventDefault();lastTap=now},{passive:false})}
+document.addEventListener('dblclick',e=>e.preventDefault(),{passive:false});
 
 /* ---------- Title and character select ---------- */
 function drawTitleTurtle(){const c=$('titleturtle');if(!c||$('title').hidden)return;const x=c.getContext('2d');x.clearRect(0,0,20,16);x.drawImage(turtleSpr.loggerhead[(performance.now()/400|0)%2],0,1)}
