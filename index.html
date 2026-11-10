@@ -909,8 +909,16 @@ function solidHit(x,y){
 
 /* ---------- Audio ---------- */
 let AC=null,master=null,musicOn=true,sfxOn=true,muStep=0,muNext=0;
+function makeAudio(){const A=window.AudioContext||window.webkitAudioContext;if(!A)return;AC=new A();master=AC.createGain();master.gain.value=.5;master.connect(AC.destination);muNext=0}
+// Phones pause audio when the game leaves the screen (iOS reports 'interrupted'). Any tap brings it back.
 function initAudio(){
-  try{ if(!AC){const A=window.AudioContext||window.webkitAudioContext;if(!A)return;AC=new A();master=AC.createGain();master.gain.value=.5;master.connect(AC.destination)} if(AC.state==='suspended')AC.resume() }catch(e){AC=null}
+  try{
+    if(!AC||AC.state==='closed'){makeAudio();return}
+    if(AC.state!=='running'){
+      const p=AC.resume();if(p&&p.catch)p.catch(()=>{});
+      const old=AC;setTimeout(()=>{if(AC===old&&old.state!=='running'){try{old.close()}catch(e){}makeAudio()}},400);
+    }
+  }catch(e){AC=null}
 }
 function tone(f,dur,type='square',vol=.12,at=0,slide=0){
   if(!AC||!sfxOn&&vol>0)return;
@@ -972,7 +980,7 @@ async function connectCloud(){
   }catch(e){}
 }
 setTimeout(connectCloud,0);
-addEventListener('visibilitychange',()=>{if(document.hidden&&G.mode==='play')save(true)});
+addEventListener('visibilitychange',()=>{if(document.hidden){if(G.mode==='play')save(true)}else if(AC&&AC.state!=='running')initAudio()});
 addEventListener('pagehide',()=>{if(G.mode==='play')writeLocal()});
 
 /* ---------- UI helpers ---------- */
@@ -1384,8 +1392,8 @@ function renderMenu(){
   }
   if(menuTab==='set'){
     const tgl=(label,on,fn)=>{const d=add(`<div class="tx"><div class="tt">${label}</div></div><button class="act">${on?'On':'Off'}</button>`);d.querySelector('button').onclick=fn};
-    tgl('Music',musicOn,()=>{musicOn=!musicOn;renderMenu()});
-    tgl('Sound effects',sfxOn,()=>{sfxOn=!sfxOn;renderMenu()});
+    tgl('Music',musicOn,()=>{musicOn=!musicOn;initAudio();renderMenu()});
+    tgl('Sound effects',sfxOn,()=>{sfxOn=!sfxOn;initAudio();if(sfxOn)setTimeout(()=>sfx.buy(),60);renderMenu()});
     const s=document.createElement('button');s.className='bigbtn alt';s.textContent='Back to title screen';s.onclick=()=>{save(true);location.reload()};L.appendChild(s);
     const r=document.createElement('button');r.className='bigbtn alt';r.style.background=resetArm?'var(--coral)':'';r.style.color=resetArm?'var(--plum)':'';r.textContent=resetArm?'Tap again to erase everything':'Start over';
     r.onclick=()=>{if(!resetArm){resetArm=true;renderMenu();return}try{localStorage.removeItem(SAVEKEY)}catch(e){}if(dbRef)dbRef.delete&&dbRef.delete().catch(()=>{});setTimeout(()=>location.reload(),150)};L.appendChild(r);
@@ -2077,6 +2085,8 @@ let newArm=false;
 $('btnNew').onclick=()=>{initAudio();if(savedGame&&!newArm){newArm=true;const b=$('btnNew');b.textContent='Erase save? Tap again';b.classList.add('warn');return}startNew()};
 $('btnSound').onclick=()=>{initAudio();const on=!(musicOn&&sfxOn);musicOn=on;sfxOn=on;$('btnSound').textContent='Sound: '+(on?'On':'Off');if(on)sfx.buy()};
 $('title').addEventListener('pointerdown',initAudio);
+['pointerdown','touchend','keydown'].forEach(t=>document.addEventListener(t,()=>{if(!AC||AC.state!=='running')initAudio()},{capture:true,passive:true}));
+addEventListener('pageshow',()=>{if(AC&&AC.state!=='running')initAudio()});
 {const cur=$('mcur').getContext('2d');cur.drawImage(spr(['..nnnnn...','.nNnnNnhh.','nnNNNNnhEh','nNnnnnNhhh','nnNNNNnhh.','.nNnnNn...','f.nnnn.f..'],{n:'#7cc957',N:'#3a6f3a',h:'#ffe08a',E:OUT,f:'#ffb65e'}),0,0);
  const items=[...document.querySelectorAll('.mi')];const move=el=>{items.forEach(i=>i.classList.toggle('on',i===el));$('mcur').style.transform=`translate(${el.offsetLeft+3}px,${el.offsetTop+Math.max(4,(el.offsetHeight-22)/2)}px)`;if(AC&&move.ready)tone(880,.03,'square',.03);move.ready=true};
  items.forEach(i=>{i.addEventListener('pointerenter',()=>move(i));i.addEventListener('focus',()=>move(i))});
